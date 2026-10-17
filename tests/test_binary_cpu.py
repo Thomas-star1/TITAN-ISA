@@ -130,5 +130,39 @@ class TestBinaryCPU(unittest.TestCase):
             cpu.step()
 
 
+    def test_trace_records_register_changes(self):
+        program = [
+            encode(("MOVI", 1, 2)),
+            encode(("MOVI", 2, 3)),
+            encode(("ADD", 3, 1, 2)),
+            encode(("HALT",)),
+        ]
+
+        cpu = BinaryCPU(program, trace=True).run()
+
+        self.assertEqual(len(cpu.trace_log), 4)
+        self.assertEqual(cpu.read_reg(3), 5)
+        self.assertEqual(
+            cpu.trace_log[0]["register_changes"],
+            ["R1: 0 -> 2"],
+        )
+        self.assertEqual(
+            cpu.trace_log[2]["register_changes"],
+            ["R3: 0 -> 5"],
+        )
+        self.assertEqual(cpu.trace_log[3]["instruction"], ("HALT",))
+
+    def test_trace_disabled_by_default(self):
+        program = [
+            encode(("MOVI", 1, 7)),
+            encode(("HALT",)),
+        ]
+
+        cpu = BinaryCPU(program).run()
+
+        self.assertFalse(cpu.trace_enabled)
+        self.assertEqual(cpu.trace_log, [])
+        self.assertEqual(cpu.read_reg(1), 7)
+
 if __name__ == "__main__":
     unittest.main()
