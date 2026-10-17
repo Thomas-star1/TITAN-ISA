@@ -101,5 +101,56 @@ class TestAssembler(unittest.TestCase):
             assemble(None)
 
 
+    def test_jmp_label(self):
+        program = assemble("""
+inicio:
+    MOVI R1, 10
+    JMP fim
+    HALT
+fim:
+    HALT
+        """)
+
+        self.assertEqual(program[1], encode(("JMP", 3)))
+
+    def test_bne_label(self):
+        program = assemble("""
+inicio:
+    MOVI R1, 0
+    BNE R1, R2, fim
+    HALT
+fim:
+    HALT
+        """)
+
+        self.assertEqual(program[1], encode(("BNE", 1, 2, 1)))
+
+    def test_backward_branch_label(self):
+        program = assemble("""
+inicio:
+    MOVI R1, 0
+    BNE R1, R2, inicio
+    HALT
+        """)
+
+        self.assertEqual(program[1], encode(("BNE", 1, 2, -2)))
+
+    def test_label_and_instruction_on_same_line(self):
+        program = assemble("inicio: MOVI R1, 7\nHALT")
+        self.assertEqual(len(program), 2)
+
+    def test_duplicate_label(self):
+        with self.assertRaisesRegex(ValueError, "label duplicado"):
+            assemble("inicio: HALT\ninicio: HALT")
+
+    def test_missing_label(self):
+        with self.assertRaisesRegex(ValueError, "label inexistente"):
+            assemble("JMP desconhecido")
+
+    def test_label_only_line(self):
+        program = assemble("inicio:\nMOVI R1, 5\nHALT")
+        self.assertEqual(len(program), 2)
+
+
 if __name__ == "__main__":
     unittest.main()

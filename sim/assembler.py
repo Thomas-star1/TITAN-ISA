@@ -1,5 +1,5 @@
 
-"""Assembler da TITAN-ISA v0.2."""
+"""Assembler da TITAN-ISA v0.3 com suporte a labels."""
 
 import re
 
@@ -7,6 +7,8 @@ from sim.encoder import encode
 
 
 REGISTER_PATTERN = re.compile(r"R([0-9]|1[0-5])$", re.IGNORECASE)
+LABEL_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+LABEL_PREFIX_PATTERN = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*):")
 
 
 def parse_register(token):
@@ -28,7 +30,7 @@ def parse_number(token):
 
 
 def assemble_instruction(line):
-    """Converte uma linha em uma palavra de máquina de 32 bits."""
+    """Converte uma instrução sem labels em uma palavra de máquina."""
     line = line.split("#", 1)[0].strip()
 
     if not line:
@@ -94,20 +96,82 @@ def assemble_instruction(line):
         )
 
     try:
-        symbolic_instruction = make_instruction(args)
-        return encode(symbolic_instruction)
+        return encode(make_instruction(args))
     except (TypeError, ValueError) as exc:
         raise ValueError(f"Erro na instrução '{line}': {exc}") from exc
 
 
+def _remove_labels(line):
+    """Extrai labels no início da linha e retorna o código restante."""
+    remaining = line.split("#", 1)[0].strip()
+    found = []
+
+    while remaining:
+        match = LABEL_PREFIX_PATTERN.match(remaining)
+        if not match:
+            break
+
+        found.append(match.group(1))
+        remaining = remaining[match.end():].strip()
+
+    return found, remaining
+
+
 def assemble(source):
-    """Converte um programa textual em uma lista de palavras de máquina."""
+    """Monta um programa em duas passagens, resolvendo labels."""
     if not isinstance(source, str):
         raise TypeError("O programa deve ser fornecido como texto.")
 
+    labels = {}
+    instructions = []
+
+    # Primeira passagem: descobrir o índice de cada label.
+    for line_number, original_line in enumerate(
+        source.splitlines(), start=1
+    ):
+        names, line = _remove_labels(original_line)
+
+        for name in names:
+            if name in labels:
+                raise ValueError(
+                    f"Linha {line_number}: label duplicado: {name}"
+                )
+
+            labels[name] = len(instructions)
+
+        if line:
+            instructions.append((line_number, line))
+
+    # Segunda passagem: resolver destinos e codificar instruções.
     program = []
 
-    for line_number, line in enumerate(source.splitlines(), start=1):
+    for instruction_index, (line_number, line) in enumerate(instructions):
+        parts = line.replace(",", " ").split()
+        mnemonic = parts[0].upper()
+        args = parts[1:]
+
+        if mnemonic in ("JMP", "BEQ", "BNE") and args:
+            target = args[-1]
+
+            if LABEL_PATTERN.fullmatch(target):
+                if target not in labels:
+                    raise ValueError(
+                        f"Linha {line_number}: "
+                        f"label inexistente: {target}"
+                    )
+
+                target_index = labels[target]
+
+                if mnemonic == "JMP":
+                    args[-1] = str(target_index)
+                else:
+                    # BEQ/BNE contam o deslocamento a partir
+                    # da instrução seguinte.
+                    displacement = target_index - (instruction_index + 1)
+                    args[-1] = str(displacement)
+
+                line = " ".join([parts[0], *args])
+
         try:
             word = assemble_instruction(line)
         except ValueError as exc:

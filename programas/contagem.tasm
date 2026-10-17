@@ -1,0 +1,11 @@
+# Soma 1 cinco vezes usando um loop
+
+MOVI R1, 0
+MOVI R2, 1
+MOVI R3, 5
+
+repetir:
+ADD R1, R1, R2
+SUB R3, R3, R2
+BNE R3, R0, repetir
+HALT
