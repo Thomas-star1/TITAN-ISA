@@ -1,0 +1,6 @@
+# Primeiro programa executado por arquivo na TITAN-ISA
+
+MOVI R1, 10
+MOVI R2, 20
+ADD R3, R1, R2
+HALT
